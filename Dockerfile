@@ -17,9 +17,6 @@ ENV \
 	testnet="false" \
 	TZ="UTC"
 
-# set workdir for build stage
-WORKDIR /chia-blockchain
-
 # install dependencies
 RUN \
 	apt-get update \
@@ -52,6 +49,9 @@ RUN \
 		/var/lib/apt/lists/* \
 		/var/tmp/*
 
+# set workdir for build stage
+WORKDIR /chia-blockchain
+
 # set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -60,7 +60,15 @@ RUN \
 	git clone -b net9.dev https://gitee.com/ext9/ext9-blockchain.git \
 		/chia-blockchain \
 	&& git submodule update --init mozilla-ca \
-	&& sh install.sh
+	&& sh install.sh \
+	\
+# cleanup
+	\
+	&& rm -rf \
+		/root/.cache \
+		/tmp/* \
+		/var/lib/apt/lists/* \
+		/var/tmp/*
 
 # set additional runtime environment variables
 ENV \
