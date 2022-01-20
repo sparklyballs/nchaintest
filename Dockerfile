@@ -1,43 +1,64 @@
-ARG UBUNTU_VER="focal"
-FROM ubuntu:${UBUNTU_VER}
+FROM python:3.9 AS chia_build
+
+# build arguments
+ARG DEBIAN_FRONTEND=noninteractive 
+ARG RELEASE
+
+# install build dependencies
+RUN \
+	apt-get update \
+	&& apt-get install \
+	--no-install-recommends -y \
+		ca-certificates \
+		curl \
+		jq \
+		lsb-release \
+		sudo
+
+# set workdir
+WORKDIR /chia-blockchain
+
+# fetch source
+RUN \
+	git clone -b net9.dev https://gitee.com/ext9/ext9-blockchain.git . \
+	&& git submodule update --init mozilla-ca \
+	&& /bin/sh ./install.sh
+
+FROM python:3.9-slim
 
 # build arguments
 ARG DEBIAN_FRONTEND=noninteractive
-ARG RELEASE
 
 # environment variables
 ENV \
-	farmer_address="null" \
+        CHIA_ROOT=/root/.chia/mainnet \
+        farmer_address= \
+        farmer_port= \
+        keys="generate" \
+        log_level="INFO" \
+        log_to_file="true" \
+        outbound_peer_count="20" \
+        peer_count="20" \
+        plots_dir="/plots" \
+        service="farmer" \
+        testnet="false" \
+        TZ="UTC" \
+        upnp="true"
+
+# legacy options
+ENV \
 	farmer="false" \
-	farmer_port="null" \
-	full_node_port="null" \
-	harvester="false" \
-	keys="generate" \
-	log_level="INFO" \
-	outbound_peer_count="20" \
-	peer_count="20" \
-	plots_dir="/plots" \
-	testnet="false" \
-	TZ="UTC"
+	harvester="false"
+
+# set workdir
+WORKDIR /chia-blockchain
 
 # install dependencies
 RUN \
 	apt-get update \
-	&& apt-get install -y \
-	--no-install-recommends \
-		acl \
-		bc \
-		ca-certificates \
-		curl \
-		git \
-		jq \
-		lsb-release \
-		openssl \
-		python3 \
-		sudo \
-		tar \
+	&& apt-get install \
+	--no-install-recommends -y \
 		tzdata \
-		unzip \
 	\
 # set timezone
 	\
@@ -52,36 +73,16 @@ RUN \
 		/var/lib/apt/lists/* \
 		/var/tmp/*
 
-# set workdir for build stage
-WORKDIR /chia-blockchain
-
-# set shell
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-# build package
-RUN \
-	git clone -b net9.dev https://gitee.com/ext9/ext9-blockchain.git \
-		/chia-blockchain \
-	&& git submodule update --init mozilla-ca \
-	&& sh install.sh \
-	\
-# cleanup
-	\
-	&& rm -rf \
-		/root/.cache \
-		/tmp/* \
-		/var/lib/apt/lists/* \
-		/var/tmp/*
-
 # set additional runtime environment variables
 ENV \
-	PATH=/chia-blockchain/venv/bin:$PATH \
-	CONFIG_ROOT=/root/.chia/ext9
+	PATH=/chia-blockchain/venv/bin:$PATH
+
+# copy build files
+COPY --from=chia_build /chia-blockchain /chia-blockchain
 
 # copy local files
 COPY docker-*.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-*.sh
 
-# entrypoint
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["docker-start.sh"]
